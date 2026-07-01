@@ -1,10 +1,10 @@
 name: AI_brief daily digest
 
 # 스케줄링은 LLM 이 아니라 GitHub Actions cron 이 담당한다. cron 은 UTC.
-# 예) 22:00 UTC = 07:00 KST(UTC+9).
+# 예) 23:00 UTC = 08:00 KST(UTC+9).
 on:
   schedule:
-    - cron: "0 22 * * *"
+    - cron: "0 23 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
