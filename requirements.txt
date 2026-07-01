@@ -1,0 +1,14 @@
+# --- 핵심 의존성 ---
+PyYAML>=6.0            # config.yaml 로드
+requests>=2.31         # HTTP(카카오 API, HN API 등)
+feedparser>=6.0        # RSS / arXiv Atom / YouTube 채널 피드 파싱
+
+# --- LLM SDK ---
+anthropic>=0.40        # 텍스트 요약·분류 (Claude)
+google-genai>=0.3      # 유튜브 영상 네이티브 URL 입력 (Gemini)
+
+# 비고:
+# - LLM SDK 두 개는 "선택적 import"로 감싸져 있어 미설치 시에도 모듈 import 는 되며,
+#   해당 LLM 호출 시점에만 명확한 오류를 낸다(항목 단위 실패 격리).
+# - YouTube 메타데이터(영상 길이)는 YouTube Data API(키 필요) 사용 시 정확하며,
+#   키가 없으면 채널 RSS 피드로 "탐지"만 수행한다.

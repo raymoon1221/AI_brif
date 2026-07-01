@@ -1,0 +1,117 @@
+# =====================================================================
+#  AI_brief 운영 설정 — 운영자가 손으로 고치는 "설정 표면".
+#  비밀값(API 키/토큰)은 여기 두지 않는다. .env / 환경변수 / GitHub Secrets 사용.
+# =====================================================================
+
+# ---------------------------------------------------------------------
+# 1) 텍스트 소스 (collector-text) : RSS / arXiv / Hacker News
+# ---------------------------------------------------------------------
+text_sources:
+  rss_lookback_hours: 48   # RSS 는 전체 이력을 주는 경우가 많음 → 이 시간 이내 글만 신규로 취급
+  max_items: 50            # 요약(Claude) 비용 상한: 최신순으로 이 개수만 처리
+  # 일반 RSS/Atom 피드 — name 과 url 만 있으면 추가된다.
+  rss:
+    - name: "OpenAI Blog"
+      url: "https://openai.com/blog/rss.xml"
+    - name: "Google DeepMind Blog"
+      url: "https://deepmind.google/blog/rss.xml"
+    - name: "Anthropic News"
+      url: "https://www.anthropic.com/news/rss.xml"
+    - name: "Hugging Face Blog"
+      url: "https://huggingface.co/blog/feed.xml"
+    - name: "The Batch (DeepLearning.AI)"
+      url: "https://www.deeplearning.ai/the-batch/feed/"
+
+  # arXiv: 최신 논문. categories 의 각 분류에서 max_results 만큼 가져온다.
+  arxiv:
+    enabled: true
+    categories: ["cs.AI", "cs.CL", "cs.LG"]
+    max_results: 15          # 분류당 최대 가져올 논문 수
+    lookback_hours: 48       # 이 시간 이내 등록분만
+
+  # Hacker News(Algolia API): 키워드로 검색, 점수 임계 이상만.
+  hackernews:
+    enabled: true
+    keywords: ["LLM", "GPT", "Claude", "Gemini", "AI agent", "transformer", "diffusion"]
+    min_points: 50           # 이 점수 이상 스토리만
+    lookback_hours: 48
+
+# ---------------------------------------------------------------------
+# 2) 영상 소스 (collector-video) : 유튜브 채널/플레이리스트
+# ---------------------------------------------------------------------
+video_sources:
+  # 채널은 channel_id(UC...) 로 지정. trust 는 큐레이션 신뢰도(1~5, 랭킹 가중치).
+  channels:
+    - name: "Two Minute Papers"
+      channel_id: "UCbfYPyITQ-7l4upoX8nvctg"
+      trust: 5
+    - name: "Yannic Kilcher"
+      channel_id: "UCZHmQk67mSJgfCCTn7xBfew"
+      trust: 5
+    - name: "AI Explained"
+      channel_id: "UCNJ1Ymd5yFuUPtn21xtRbbw"
+      trust: 4
+  # 플레이리스트도 동일하게 추가 가능(선택).
+  playlists: []
+    # - name: "Some Playlist"
+    #   playlist_id: "PLxxxxxxxx"
+    #   trust: 3
+
+  # --- 일일 예산 / 선별 규칙 ---
+  daily_budget_minutes: 480   # 기본 8시간(=480분). 더 낮춰도 됨(예: 120).
+  per_channel_cap: 3          # 예산 초과 선별 시 채널당 최대 선택 영상 수
+  lookback_hours: 36          # 이 시간 이내 신규 업로드만 탐지
+  # 예산 초과 선별 시 제목/설명 적합도 가산 키워드(당일 영상은 인기지표 대신 이걸로 판단)
+  relevance_keywords:
+    ["new model", "release", "benchmark", "architecture", "paper", "SOTA",
+     "GPT", "Claude", "Gemini", "Llama", "open source", "agent", "reasoning"]
+
+# ---------------------------------------------------------------------
+# 3) 분류·요약 (classifier-summarizer)
+# ---------------------------------------------------------------------
+classifier:
+  # 두 트랙 분류 키워드(애매할 때의 폴백 규칙 + Claude 프롬프트 힌트).
+  frontier_keywords:    # 배움: 원리를 배워야 하는 기술
+    ["architecture", "model", "paper", "benchmark", "training", "fine-tuning",
+     "transformer", "diffusion", "RLHF", "attention", "pretraining", "논문",
+     "기법", "알고리즘", "SOTA", "ablation", "loss", "embedding"]
+  trend_keywords:       # 활용: 바로 써먹는 제품/시장/워크플로우
+    ["launch", "release", "product", "startup", "funding", "API", "pricing",
+     "workflow", "use case", "integration", "feature", "available", "출시",
+     "제품", "도입", "활용", "사례", "업데이트", "시장"]
+  # 제목 유사도 이 값 이상이면 텍스트/영상 교차 중복으로 간주(0~1)
+  dedup_title_threshold: 0.72
+
+# ---------------------------------------------------------------------
+# 4) 다이제스트 / 발송 (delivery)
+# ---------------------------------------------------------------------
+delivery:
+  # 발송 방식: "link"(HTML 다이제스트 + 카톡엔 링크 1건, 권장) | "text"(200자 분할 발송)
+  mode: link
+  # GitHub Pages 주소(mode=link 필수). 예: https://USERNAME.github.io/AI_brif
+  # 비어 있으면 자동으로 text 모드로 폴백한다. (USERNAME/repo 를 본인 것으로)
+  site_base_url: "https://raymoon1221.github.io/AI_brif"
+  publish_dir: public           # HTML 을 쓸 디렉터리(GitHub Actions 가 이 폴더를 Pages 로 배포)
+  title_prefix: "🌏 오늘의 해외 AI 브리핑"
+  max_items_per_track: 5        # (text 모드) 트랙별 최대 항목 수(초과분은 "…외 N건" 으로 말줄임)
+  # 카카오 기본 "텍스트" 템플릿의 text 길이 한도는 정확히 200자(공식 문서 확인).
+  # 200자에선 항목 1개 ≈ 메시지 1개. 알림을 줄이려면 max_items_per_track 을 낮추고,
+  # 한 메시지에 더 담으려면 커스텀(비기본) 템플릿을 쓰고 이 값을 늘린다.
+  kakao_text_limit: 200
+  max_messages: 16              # 총 메시지 수 상한(초과분은 "…생략"). 항목수와 정합되게 설정
+  # 분할 발송 시 메시지 사이 간격(초) — 과도한 호출 방지.
+  send_interval_sec: 0.5
+
+# ---------------------------------------------------------------------
+# 5) LLM 모델
+# ---------------------------------------------------------------------
+models:
+  claude: "claude-sonnet-4-6"     # 텍스트 요약·분류 (필요시 claude-haiku-4-5 로 비용↓)
+  gemini: "gemini-2.5-flash"      # 유튜브 영상 분석
+
+# ---------------------------------------------------------------------
+# 6) 경로(상태 파일) — 보통 그대로 둔다.
+# ---------------------------------------------------------------------
+paths:
+  state_dir: "state"
+  out_dir: "out"                  # dry-run 결과물 저장 위치
