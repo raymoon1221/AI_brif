@@ -27,6 +27,7 @@ try:
     from common.env import get_secret
     from common.item import Item, FRONTIER, TREND, KOREA, VALID_TRACKS
     from common.jsonutil import extract_json
+    from common.glossary import gloss_rules
     from common.logging_setup import get_logger
 except ModuleNotFoundError:
     import os
@@ -35,6 +36,7 @@ except ModuleNotFoundError:
     from common.env import get_secret
     from common.item import Item, FRONTIER, TREND, KOREA, VALID_TRACKS
     from common.jsonutil import extract_json
+    from common.glossary import gloss_rules
     from common.logging_setup import get_logger
 
 log = get_logger("classifier-summarizer")
@@ -64,20 +66,9 @@ def _coerce_track(track: Any, item: Item, cfg: Config) -> str:
 # --------------------------------------------------------------------------
 # Claude 텍스트 요약 + 분류 (한 번의 호출, JSON)
 # --------------------------------------------------------------------------
-# 공통 컨셉: 비개발자(일반인)를 위해 쉽게, AI 용어는 괄호로 짧게 풀어 익숙해지게 한다.
-_EASY_RULES = (
-    "규칙:\n"
-    "- 'AI를 잘 모르는 일반인'도 이해할 만큼 쉬운 한국어로 쓴다. 어려운 문장·번역투 금지.\n"
-    "- 영어 약자(예: LLM, API, RAG, SOTA, GPU, SDK)가 처음 나올 때만 바로 뒤에 괄호로\n"
-    "  아주 짧은 뜻풀이를 한 번 붙인다. 예) LLM(사람 말을 알아듣고 답하는 큰 AI), API(프로그램끼리 잇는 통로).\n"
-    "- 그 외 용어(벤치마크·파인튜닝·오픈소스처럼 한글로 굳어진 말)나 일반 비즈니스 용어에는\n"
-    "  괄호 풀이를 붙이지 않는다. 대신 문장 자체를 쉽게 쓴다.\n"
-    "- '무엇이 새로운지 / 그래서 뭐가 좋아지는지'를 일상어로 담는다.\n"
-)
-
-
 def _build_prompt(item: Item, cfg: Config, is_korea: bool = False) -> str:
     c = cfg.get("classifier", {}) or {}
+    rules = gloss_rules(str(c.get("gloss_level", "rare")))   # 용어 풀이 수준(none/rare/all)
     body = (item.raw_or_transcript or item.title)[:6000]
     head = f"[제목] {item.title}\n[출처] {item.source}\n[본문]\n{body}"
 
@@ -85,7 +76,7 @@ def _build_prompt(item: Item, cfg: Config, is_korea: bool = False) -> str:
         return (
             "당신은 대한민국 국내 AI 소식을 '일반인'에게 쉽게 풀어주는 큐레이터입니다.\n"
             "아래 국내 기사를 읽고 비개발자도 이해할 쉬운 한국어로 2~3문장 요약하세요.\n"
-            f"{_EASY_RULES}"
+            f"{rules}"
             "- 누가·무엇을·왜 했는지, 우리 일상이나 업계에 어떤 의미인지 일상어로 담는다.\n\n"
             f"{head}\n\n"
             "아래 JSON 형식만 출력(코드펜스/설명 금지):\n"
@@ -99,7 +90,7 @@ def _build_prompt(item: Item, cfg: Config, is_korea: bool = False) -> str:
         "아래 글을 읽고 두 가지를 하세요.\n\n"
         f"{head}\n\n"
         f"1) 쉬운 한국어로 2~3문장 요약. (영어 원문이어도 요약은 반드시 한국어)\n"
-        f"{_EASY_RULES}"
+        f"{rules}"
         "2) 두 트랙 중 하나로 분류(애매하면 더 적합한 쪽으로 강제):\n"
         f"   - FRONTIER(배움): 새 모델·기술·원리 등 '어떻게 되는지 배우는' 내용. (힌트: {f_kw})\n"
         f"   - TREND(활용): 제품·서비스·시장·업무 등 '바로 써먹거나 흐름을 아는' 내용. (힌트: {t_kw})\n\n"

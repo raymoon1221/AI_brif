@@ -30,6 +30,7 @@ try:
     from common.env import get_secret
     from common.item import Item, FRONTIER, TREND
     from common.jsonutil import extract_json
+    from common.glossary import gloss_rules
     from common.logging_setup import get_logger
     from common.state import SeenStore, write_json
 except ModuleNotFoundError:
@@ -39,6 +40,7 @@ except ModuleNotFoundError:
     from common.env import get_secret
     from common.item import Item, FRONTIER, TREND
     from common.jsonutil import extract_json
+    from common.glossary import gloss_rules
     from common.logging_setup import get_logger
     from common.state import SeenStore, write_json
 
@@ -267,25 +269,21 @@ def select_within_budget(cfg: Config, items: list[Item]) -> list[Item]:
 # --------------------------------------------------------------------------
 # 4) Gemini 네이티브 URL 요약 (한국어 요약 + 트랙을 한 번의 호출로)
 # --------------------------------------------------------------------------
-_GEMINI_PROMPT = """당신은 'AI를 잘 모르는 일반인'에게 해외 AI 영상을 쉽게 풀어주는 큐레이터입니다.
-아래 유튜브 영상을 시청하고(자막이 없어도 영상/음성으로 직접 이해) 다음을 수행하세요.
-
-1) 비개발자도 이해할 만큼 쉬운 한국어로 핵심을 2~3문장 요약. (영어 영상이어도 요약은 한국어)
-   규칙:
-   - 영어 약자(예: LLM, API, GPU, SOTA)가 처음 나올 때만 바로 뒤에 괄호로 아주 짧은 뜻풀이를 한 번 붙인다.
-     예) LLM(사람 말을 알아듣고 답하는 큰 AI).
-   - 그 외 용어(벤치마크·파인튜닝 등)나 일반 비즈니스 용어에는 괄호 풀이를 붙이지 않고 문장을 쉽게 쓴다.
-   - '무엇이 새로운지 / 그래서 뭐가 좋아지는지'를 일상어로 담는다.
-2) 두 트랙 중 하나로 분류(애매하면 더 적합한 쪽으로 강제):
-   - FRONTIER(배움): 새 모델·기술·원리 등 '어떻게 되는지 배우는' 내용.
-   - TREND(활용): 제품·서비스·시장 등 '바로 써먹거나 흐름을 아는' 내용.
-
-반드시 아래 JSON 형식만 출력하세요(코드펜스/설명 금지):
-{"summary": "쉬운 한국어 2~3문장", "track": "FRONTIER 또는 TREND", "reason": "분류 근거 한 문장"}
-"""
+def _gemini_prompt(gloss_level: str = "rare") -> str:
+    return (
+        "당신은 '일반인'에게 해외 AI 영상을 쉽게 풀어주는 큐레이터입니다.\n"
+        "아래 유튜브 영상을 시청하고(자막이 없어도 영상/음성으로 직접 이해) 다음을 수행하세요.\n\n"
+        "1) 비개발자도 이해할 만큼 쉬운 한국어로 핵심을 2~3문장 요약. (영어 영상이어도 요약은 한국어)\n"
+        f"{gloss_rules(gloss_level)}"
+        "2) 두 트랙 중 하나로 분류(애매하면 더 적합한 쪽으로 강제):\n"
+        "   - FRONTIER(배움): 새 모델·기술·원리 등 '어떻게 되는지 배우는' 내용.\n"
+        "   - TREND(활용): 제품·서비스·시장 등 '바로 써먹거나 흐름을 아는' 내용.\n\n"
+        "반드시 아래 JSON 형식만 출력하세요(코드펜스/설명 금지):\n"
+        '{"summary": "쉬운 한국어 2~3문장", "track": "FRONTIER 또는 TREND", "reason": "분류 근거 한 문장"}'
+    )
 
 
-def summarize_video(item: Item, model: str, api_key: str) -> Item:
+def summarize_video(item: Item, model: str, api_key: str, gloss_level: str = "rare") -> Item:
     """단일 영상을 Gemini 네이티브 YouTube URL 입력으로 요약·분류(한 번의 호출)."""
     from google import genai           # 지역 import: 미설치 시 이 항목만 실패
     from google.genai import types
@@ -295,7 +293,7 @@ def summarize_video(item: Item, model: str, api_key: str) -> Item:
         model=model,
         contents=types.Content(parts=[
             types.Part(file_data=types.FileData(file_uri=item.url)),  # ← 네이티브 YouTube URL
-            types.Part(text=_GEMINI_PROMPT),
+            types.Part(text=_gemini_prompt(gloss_level)),
         ]),
     )
     data = extract_json(resp.text or "")
@@ -369,10 +367,11 @@ def process(cfg: Config, summarize: bool = True, use_dedup: bool = True,
         return []
 
     model = cfg.get("models.gemini", "gemini-2.5-flash")
+    gloss_level = str((cfg.get("classifier", {}) or {}).get("gloss_level", "rare"))
     out: list[Item] = []
     for it in selected:
         try:
-            out.append(summarize_video(it, model, api_key))
+            out.append(summarize_video(it, model, api_key, gloss_level))
             log.info("Gemini 요약 OK: '%s' → %s", it.title[:50], out[-1].track)
             time.sleep(0.5)  # 요청당 1개 영상 권장 + 과호출 방지
         except Exception as e:  # noqa: BLE001 — 항목 단위 격리

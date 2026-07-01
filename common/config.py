@@ -43,6 +43,7 @@ DEFAULTS: dict[str, Any] = {
         "lookback_hours": 36, "relevance_keywords": [],
     },
     "classifier": {
+        "gloss_level": "rare",
         "frontier_keywords": [], "trend_keywords": [],
         "dedup_title_threshold": 0.72,
     },

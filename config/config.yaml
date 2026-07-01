@@ -80,6 +80,9 @@ video_sources:
 # 3) 분류·요약 (classifier-summarizer)
 # ---------------------------------------------------------------------
 classifier:
+  # 요약의 영어 약자 괄호 풀이 수준:
+  #   none = 풀이 안 붙임(가장 깔끔) / rare = 낯선 약자만(추천) / all = 모든 약자(초보 공유용)
+  gloss_level: rare
   # 두 트랙 분류 키워드(애매할 때의 폴백 규칙 + Claude 프롬프트 힌트).
   frontier_keywords:    # 배움: 원리를 배워야 하는 기술
     ["architecture", "model", "paper", "benchmark", "training", "fine-tuning",
