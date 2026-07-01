@@ -17,21 +17,24 @@ from urllib.parse import urlsplit
 
 try:
     from common.config import Config
-    from common.item import Item, FRONTIER, TREND
+    from common.item import Item, FRONTIER, TREND, KOREA
     from common.logging_setup import get_logger
 except ModuleNotFoundError:
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from common.config import Config
-    from common.item import Item, FRONTIER, TREND
+    from common.item import Item, FRONTIER, TREND, KOREA
     from common.logging_setup import get_logger
 
 log = get_logger("render-html")
 
-SECTIONS = [
-    (FRONTIER, "📘 배움", "FRONTIER", "새 모델·아키텍처·논문·기법 — 원리를 배우는 콘텐츠"),
-    (TREND, "🛠 활용", "TREND", "제품·시장·워크플로우 — 바로 써먹는 콘텐츠"),
-]
+# 트랙별 표시 정보: (이모지+한글 라벨, 영문, 한 줄 설명). 순서는 config.section_order 로 정한다.
+SECTION_META = {
+    TREND: ("🛠 활용", "TREND", "제품·서비스·시장 — 바로 써먹는 이야기"),
+    KOREA: ("🇰🇷 국내 트렌드", "KOREA", "대한민국 국내 AI 소식"),
+    FRONTIER: ("📘 배움", "FRONTIER", "새 기술·원리 — 알아두면 좋은 이야기"),
+}
+DEFAULT_ORDER = [TREND, KOREA, FRONTIER]
 
 
 def _safe_url(url: str) -> str | None:
@@ -75,14 +78,23 @@ def _card(idx: int, it: Item) -> str:
 def render_digest(items: list[Item], cfg: Config, date_str: str) -> str:
     d = cfg.get("delivery", {}) or {}
     title_prefix = _esc(d.get("title_prefix", "🌏 오늘의 해외 AI 브리핑"))
+    order = [t for t in (d.get("section_order") or DEFAULT_ORDER) if t in SECTION_META]
+    caps = d.get("html_max_items") or {}
 
-    buckets: dict[str, list[Item]] = {FRONTIER: [], TREND: []}
+    buckets: dict[str, list[Item]] = {t: [] for t in SECTION_META}
     for it in items:
         if it.track in buckets:
             buckets[it.track].append(it)
+    # 트랙별 상한 적용(난잡함 방지 — 최신 우선; items 는 수집 시 최신순 정렬됨).
+    for t in buckets:
+        cap = int(caps.get(t, 8))
+        if 0 <= cap < len(buckets[t]):
+            buckets[t] = buckets[t][:cap]
+    counts = {t: len(buckets[t]) for t in buckets}
 
     sections_html = []
-    for track, emoji_ko, en, desc in SECTIONS:
+    for track in order:
+        emoji_ko, en, desc = SECTION_META[track]
         lst = buckets.get(track, [])
         cards = "\n".join(_card(i, it) for i, it in enumerate(lst, 1)) if lst \
             else '      <p class="empty">오늘 해당 항목이 없습니다.</p>'
@@ -93,7 +105,8 @@ def render_digest(items: list[Item], cfg: Config, date_str: str) -> str:
     </section>""")
 
     gen = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
-    total = sum(len(v) for v in buckets.values())
+    total = sum(counts.values())
+    count_line = " · ".join(f"{SECTION_META[t][0]} {counts[t]}" for t in order)
 
     return f"""<!DOCTYPE html>
 <html lang="ko">
@@ -140,7 +153,7 @@ def render_digest(items: list[Item], cfg: Config, date_str: str) -> str:
     <header>
       <h1>{title_prefix}</h1>
       <div class="date">{_esc(date_str)}</div>
-      <div class="count">총 {total}건 · 📘 배움 {len(buckets[FRONTIER])} · 🛠 활용 {len(buckets[TREND])}</div>
+      <div class="count">총 {total}건 · {count_line}</div>
     </header>
 {chr(10).join(sections_html)}
     <footer>자동 생성 · {gen} · 원문 링크는 각 항목의 출처를 따릅니다.</footer>

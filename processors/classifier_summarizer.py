@@ -25,7 +25,7 @@ from typing import Any
 try:
     from common.config import Config, load_config
     from common.env import get_secret
-    from common.item import Item, FRONTIER, TREND, VALID_TRACKS
+    from common.item import Item, FRONTIER, TREND, KOREA, VALID_TRACKS
     from common.jsonutil import extract_json
     from common.logging_setup import get_logger
 except ModuleNotFoundError:
@@ -33,7 +33,7 @@ except ModuleNotFoundError:
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from common.config import Config, load_config
     from common.env import get_secret
-    from common.item import Item, FRONTIER, TREND, VALID_TRACKS
+    from common.item import Item, FRONTIER, TREND, KOREA, VALID_TRACKS
     from common.jsonutil import extract_json
     from common.logging_setup import get_logger
 
@@ -64,47 +64,68 @@ def _coerce_track(track: Any, item: Item, cfg: Config) -> str:
 # --------------------------------------------------------------------------
 # Claude 텍스트 요약 + 분류 (한 번의 호출, JSON)
 # --------------------------------------------------------------------------
-def _build_prompt(item: Item, cfg: Config) -> str:
+# 공통 컨셉: 비개발자(일반인)를 위해 쉽게, AI 용어는 괄호로 짧게 풀어 익숙해지게 한다.
+_EASY_RULES = (
+    "규칙:\n"
+    "- 'AI를 잘 모르는 일반인'도 이해할 만큼 쉬운 한국어로 쓴다. 어려운 문장·번역투 금지.\n"
+    "- 전문용어·영어 약어는 최대한 풀어쓴다. 꼭 필요한 AI 업계 용어가 나오면 바로 뒤에 괄호로\n"
+    "  '아주 쉬운 한마디' 설명을 붙여 독자가 그 용어에 익숙해지게 한다.\n"
+    "  예) LLM(사람 말을 알아듣고 답하는 큰 AI), 벤치마크(성능을 재는 시험),\n"
+    "      파인튜닝(기존 AI를 특정 용도에 맞게 더 훈련), 오픈소스(누구나 가져다 쓰는 공개 기술).\n"
+    "- '무엇이 새로운지 / 그래서 뭐가 좋아지는지'를 일상어로 담는다.\n"
+)
+
+
+def _build_prompt(item: Item, cfg: Config, is_korea: bool = False) -> str:
     c = cfg.get("classifier", {}) or {}
-    f_kw = ", ".join(c.get("frontier_keywords", [])[:12])
-    t_kw = ", ".join(c.get("trend_keywords", [])[:12])
     body = (item.raw_or_transcript or item.title)[:6000]
-    return f"""당신은 해외 AI 콘텐츠를 한국어로 브리핑하는 분석가입니다.
-아래 글을 읽고 두 가지를 수행하세요.
+    head = f"[제목] {item.title}\n[출처] {item.source}\n[본문]\n{body}"
 
-[제목] {item.title}
-[출처] {item.source}
-[본문]
-{body}
+    if is_korea:
+        return (
+            "당신은 대한민국 국내 AI 소식을 '일반인'에게 쉽게 풀어주는 큐레이터입니다.\n"
+            "아래 국내 기사를 읽고 비개발자도 이해할 쉬운 한국어로 2~3문장 요약하세요.\n"
+            f"{_EASY_RULES}"
+            "- 누가·무엇을·왜 했는지, 우리 일상이나 업계에 어떤 의미인지 일상어로 담는다.\n\n"
+            f"{head}\n\n"
+            "아래 JSON 형식만 출력(코드펜스/설명 금지):\n"
+            '{"summary": "쉬운 한국어 2~3문장"}'
+        )
 
-1) 한국어로 핵심을 2~3문장으로 요약하세요. (영어 원문이어도 요약은 반드시 한국어)
-2) 다음 두 트랙 중 하나로 분류하세요(애매하면 더 적합한 한쪽으로 강제 배정):
-   - FRONTIER(배움): 새 모델·아키텍처·논문·기법·벤치마크 등 "원리를 배워야 하는" 기술.
-     요약에 핵심 기여·작동 원리·한계를 담으세요. (힌트 키워드: {f_kw})
-   - TREND(활용): 제품 출시·시장·실전 적용·워크플로우·업계 뉴스 등 "바로 써먹는" 내용.
-     요약에 무엇을·어디에·어떻게 쓰는지를 담으세요. (힌트 키워드: {t_kw})
+    f_kw = ", ".join(c.get("frontier_keywords", [])[:10])
+    t_kw = ", ".join(c.get("trend_keywords", [])[:10])
+    return (
+        "당신은 해외 AI 소식을 '일반인'에게 쉽게 풀어주는 큐레이터입니다.\n"
+        "아래 글을 읽고 두 가지를 하세요.\n\n"
+        f"{head}\n\n"
+        f"1) 쉬운 한국어로 2~3문장 요약. (영어 원문이어도 요약은 반드시 한국어)\n"
+        f"{_EASY_RULES}"
+        "2) 두 트랙 중 하나로 분류(애매하면 더 적합한 쪽으로 강제):\n"
+        f"   - FRONTIER(배움): 새 모델·기술·원리 등 '어떻게 되는지 배우는' 내용. (힌트: {f_kw})\n"
+        f"   - TREND(활용): 제품·서비스·시장·업무 등 '바로 써먹거나 흐름을 아는' 내용. (힌트: {t_kw})\n\n"
+        "아래 JSON 형식만 출력(코드펜스/설명 금지):\n"
+        '{"summary": "쉬운 한국어 2~3문장", "track": "FRONTIER 또는 TREND"}'
+    )
 
-아래 JSON 형식만 출력하세요(코드펜스/추가 설명 금지):
-{{"summary": "한국어 2~3문장", "track": "FRONTIER 또는 TREND"}}"""
 
-
-def summarize_text_with_claude(item: Item, model: str, api_key: str, cfg: Config) -> Item:
+def summarize_text_with_claude(item: Item, model: str, api_key: str, cfg: Config,
+                               is_korea: bool = False) -> Item:
     import anthropic  # 지역 import: 미설치 시 이 항목만 실패
     client = anthropic.Anthropic(api_key=api_key)
     msg = client.messages.create(
         model=model,
         max_tokens=700,
-        messages=[{"role": "user", "content": _build_prompt(item, cfg)}],
+        messages=[{"role": "user", "content": _build_prompt(item, cfg, is_korea)}],
     )
     text = "".join(getattr(b, "text", "") for b in msg.content)
     data = extract_json(text)
     summary = (data.get("summary") or "").strip()
-    # 모델이 track 만 주고 summary 를 비우는 경우 본문 스니펫으로 보정(빈 요약 발송 방지).
     if not summary:
         snippet = re.sub(r"\s+", " ", item.raw_or_transcript or item.title)[:160]
         summary = f"(요약 생성 실패 — 원문 발췌) {snippet}"
     item.summary = summary
-    item.track = _coerce_track(data.get("track"), item, cfg)
+    # 국내 소스는 지역 기반으로 KOREA 트랙 고정. 그 외는 배움/활용 분류.
+    item.track = KOREA if is_korea else _coerce_track(data.get("track"), item, cfg)
     item.meta["summarized_by"] = "claude"
     return item
 
@@ -170,39 +191,39 @@ def process(items: list[Item], cfg: Config) -> list[Item]:
                 continue
 
             # 텍스트
+            is_korea = it.meta.get("region") == "kr"   # 국내 소스 → KOREA 트랙
             if it.summary and it.track in VALID_TRACKS:
                 out.append(it)  # 이미 처리됨
                 continue
 
             if api_key:
-                summarize_text_with_claude(it, model, api_key, cfg)
+                summarize_text_with_claude(it, model, api_key, cfg, is_korea=is_korea)
                 time.sleep(0.2)
             else:
-                # 키 없음(주로 구조 dry-run): 폴백 요약 + 키워드 분류로 흐름 유지.
+                # 키 없음(주로 구조 dry-run): 폴백 요약 + (국내면 KOREA / 아니면 키워드 분류).
                 snippet = re.sub(r"\s+", " ", it.raw_or_transcript or it.title)[:180]
                 it.summary = f"(요약 생략 — ANTHROPIC_API_KEY 미설정) {snippet}"
-                it.track = keyword_classify(it, cfg)
+                it.track = KOREA if is_korea else keyword_classify(it, cfg)
                 it.meta["summarized_by"] = "fallback"
             out.append(it)
             log.info("분류 OK: [%s] '%s'", it.track, it.title[:50])
         except Exception as e:  # noqa: BLE001 — 항목 단위 격리
             # 요약 호출/JSON 파싱이 실패해도 항목을 버리지 않는다(track 보장 누락 0).
-            # 폴백 요약 + 키워드 분류로 보정해 다이제스트에 남긴다.
             log.warning("요약/분류 실패 → 폴백 보정: '%s' : %s", it.title[:50], e)
             try:
                 if not it.summary:
                     snippet = re.sub(r"\s+", " ", it.raw_or_transcript or it.title)[:160]
                     it.summary = f"(요약 실패 — 원문 발췌) {snippet}"
-                it.track = keyword_classify(it, cfg)
+                it.track = KOREA if it.meta.get("region") == "kr" else keyword_classify(it, cfg)
                 it.meta["summarized_by"] = "fallback-error"
                 out.append(it)
             except Exception as e2:  # noqa: BLE001 — 폴백마저 실패하면 그때만 제외
                 log.warning("폴백도 실패(이 항목만 건너뜀): '%s' : %s", it.title[:50], e2)
 
-    # 모든 item 의 track/summary 최종 보증(누락 0건)
+    # 모든 item 의 track/summary 최종 보증(누락 0건). 국내는 KOREA 유지.
     for it in out:
         if it.track not in VALID_TRACKS:
-            it.track = keyword_classify(it, cfg)
+            it.track = KOREA if it.meta.get("region") == "kr" else keyword_classify(it, cfg)
         if not (it.summary or "").strip():
             it.summary = f"(요약 없음) {it.title}"
 

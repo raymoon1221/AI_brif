@@ -8,8 +8,9 @@
 # ---------------------------------------------------------------------
 text_sources:
   rss_lookback_hours: 48   # RSS 는 전체 이력을 주는 경우가 많음 → 이 시간 이내 글만 신규로 취급
-  max_items: 50            # 요약(Claude) 비용 상한: 최신순으로 이 개수만 처리
-  # 일반 RSS/Atom 피드 — name 과 url 만 있으면 추가된다.
+  max_items: 50            # 해외 텍스트 요약(Claude) 상한: 최신순 이 개수만
+  korea_max_items: 15      # 국내 텍스트 상한(따로 관리 — 국내 뉴스가 해외를 밀어내지 않게)
+  # 해외 RSS/Atom 피드 → 배움/활용(FRONTIER/TREND) 으로 분류된다.
   rss:
     - name: "OpenAI Blog"
       url: "https://openai.com/blog/rss.xml"
@@ -21,6 +22,15 @@ text_sources:
       url: "https://huggingface.co/blog/feed.xml"
     - name: "The Batch (DeepLearning.AI)"
       url: "https://www.deeplearning.ai/the-batch/feed/"
+
+  # 🇰🇷 국내 RSS → '대한민국 국내 트렌드(KOREA)' 섹션으로 들어간다(지역 기반, 배움/활용 분류 안 함).
+  korea_rss:
+    - name: "AI타임스"
+      url: "https://www.aitimes.com/rss/allArticle.xml"
+    - name: "구글뉴스(국내 AI)"
+      url: "https://news.google.com/rss/search?q=%EC%9D%B8%EA%B3%B5%EC%A7%80%EB%8A%A5%20AI&hl=ko&gl=KR&ceid=KR:ko"
+    - name: "ZDNet Korea"
+      url: "https://feeds.feedburner.com/zdkorea"
 
   # arXiv: 최신 논문. categories 의 각 분류에서 max_results 만큼 가져온다.
   arxiv:
@@ -93,6 +103,13 @@ delivery:
   site_base_url: "https://raymoon1221.github.io/AI_brif"
   publish_dir: public           # HTML 을 쓸 디렉터리(GitHub Actions 가 이 폴더를 Pages 로 배포)
   title_prefix: "🌏 오늘의 해외 AI 브리핑"
+  # 섹션 표시 순서(위→아래). 배움(FRONTIER)을 맨 아래로.
+  section_order: ["TREND", "KOREA", "FRONTIER"]
+  # HTML 다이제스트에서 트랙별 최대 항목 수(난잡함 방지 / 배움은 절반 수준으로 축소).
+  html_max_items:
+    TREND: 8       # 활용
+    KOREA: 8       # 국내 트렌드
+    FRONTIER: 8    # 배움(가짓수 축소 — 최신·핵심 위주)
   max_items_per_track: 5        # (text 모드) 트랙별 최대 항목 수(초과분은 "…외 N건" 으로 말줄임)
   # 카카오 기본 "텍스트" 템플릿의 text 길이 한도는 정확히 200자(공식 문서 확인).
   # 200자에선 항목 1개 ≈ 메시지 1개. 알림을 줄이려면 max_items_per_track 을 낮추고,

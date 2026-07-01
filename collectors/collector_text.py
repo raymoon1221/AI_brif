@@ -183,7 +183,7 @@ def collect(cfg: Config, use_dedup: bool = True) -> list[Item]:
     max_items = int(src.get("max_items", 50))
     collected: list[Item] = []
 
-    # 1) RSS (lookback 윈도로 최신만)
+    # 1) 해외 RSS (lookback 윈도로 최신만) → 배움/활용 분류 대상
     for entry in src.get("rss", []) or []:
         name, url = entry.get("name", "RSS"), entry.get("url")
         if not url:
@@ -194,6 +194,20 @@ def collect(cfg: Config, use_dedup: bool = True) -> list[Item]:
             collected.extend(got)
         except Exception as e:  # noqa: BLE001 — 소스 단위 격리
             log.warning("RSS '%s' 수집 실패(건너뜀): %s", name, e)
+
+    # 1-2) 국내 RSS → KOREA(국내 트렌드) 트랙. region=kr 로 태깅.
+    for entry in src.get("korea_rss", []) or []:
+        name, url = entry.get("name", "국내"), entry.get("url")
+        if not url:
+            continue
+        try:
+            got = _collect_rss(name, url, rss_lookback)
+            for it in got:
+                it.meta["region"] = "kr"
+            log.info("국내 RSS '%s' → %d건(최근 %dh)", name, len(got), rss_lookback)
+            collected.extend(got)
+        except Exception as e:  # noqa: BLE001 — 소스 단위 격리
+            log.warning("국내 RSS '%s' 수집 실패(건너뜀): %s", name, e)
 
     # 2) arXiv
     arxiv_cfg = src.get("arxiv", {}) or {}
@@ -227,13 +241,22 @@ def collect(cfg: Config, use_dedup: bool = True) -> list[Item]:
             continue
         out.append(it)
 
-    # 최신순 정렬 후 상한 적용 — 요약(Claude) 비용을 일일 예산 수준으로 묶는다.
-    out.sort(key=lambda it: it.published_at or "", reverse=True)
-    if len(out) > max_items:
-        log.info("텍스트 %d건 → 최신 %d건으로 상한 적용", len(out), max_items)
-        out = out[:max_items]
+    # 국내/해외를 '따로' 상한 적용 — 국내 뉴스가 많아 해외(배움/활용)를 밀어내지 않도록 분리한다.
+    korea_max = int(src.get("korea_max_items", 15))
+    korea = [it for it in out if it.meta.get("region") == "kr"]
+    overseas = [it for it in out if it.meta.get("region") != "kr"]
+    korea.sort(key=lambda it: it.published_at or "", reverse=True)
+    overseas.sort(key=lambda it: it.published_at or "", reverse=True)
+    if len(korea) > korea_max:
+        log.info("국내 %d건 → 최신 %d건으로 상한", len(korea), korea_max)
+        korea = korea[:korea_max]
+    if len(overseas) > max_items:
+        log.info("해외 %d건 → 최신 %d건으로 상한", len(overseas), max_items)
+        overseas = overseas[:max_items]
+    out = overseas + korea
 
-    log.info("텍스트 수집 합계: %d건(중복 제거·상한 후)", len(out))
+    log.info("텍스트 수집 합계: 해외 %d + 국내 %d = %d건(중복 제거·상한 후)",
+             len(overseas), len(korea), len(out))
     return out
 
 

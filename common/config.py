@@ -34,8 +34,8 @@ def _deep_merge(base: dict, override: dict) -> dict:
 # 누락 키에 대한 최소 기본값(설정 파일이 일부만 있어도 동작하게).
 DEFAULTS: dict[str, Any] = {
     "text_sources": {
-        "rss": [], "arxiv": {"enabled": False}, "hackernews": {"enabled": False},
-        "rss_lookback_hours": 48, "max_items": 50,
+        "rss": [], "korea_rss": [], "arxiv": {"enabled": False}, "hackernews": {"enabled": False},
+        "rss_lookback_hours": 48, "max_items": 50, "korea_max_items": 15,
     },
     "video_sources": {
         "channels": [], "playlists": [],
@@ -51,6 +51,8 @@ DEFAULTS: dict[str, Any] = {
         "site_base_url": "",
         "publish_dir": "public",
         "title_prefix": "🌏 오늘의 해외 AI 브리핑",
+        "section_order": ["TREND", "KOREA", "FRONTIER"],
+        "html_max_items": {"TREND": 8, "KOREA": 8, "FRONTIER": 8},
         "max_items_per_track": 5,
         "kakao_text_limit": 200,
         "max_messages": 16,

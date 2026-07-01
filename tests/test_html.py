@@ -63,8 +63,8 @@ def test_link_message_short():
     url = "https://user.github.io/AI_brif/archive/2026-07-01.html"
     msg = digest.build_link_message(items, cfg, "2026-07-01", url)
     assert url in msg and len(msg) <= 200
-    assert "배움 1건" in msg and "활용 1건" in msg
-    print(f"[OK] 링크 메시지 {len(msg)}자, URL 포함")
+    assert "활용 1" in msg and "배움 1" in msg and "국내" in msg
+    print(f"[OK] 링크 메시지 {len(msg)}자, 3트랙 건수+URL 포함")
 
 
 if __name__ == "__main__":

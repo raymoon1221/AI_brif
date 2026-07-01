@@ -12,18 +12,21 @@ from typing import Any
 
 try:
     from common.config import Config
-    from common.item import Item, FRONTIER, TREND
+    from common.item import Item, FRONTIER, TREND, KOREA
     from common.logging_setup import get_logger
 except ModuleNotFoundError:
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from common.config import Config
-    from common.item import Item, FRONTIER, TREND
+    from common.item import Item, FRONTIER, TREND, KOREA
     from common.logging_setup import get_logger
 
 log = get_logger("digest")
 
-SECTION_TITLES = {FRONTIER: "📘 배움(FRONTIER)", TREND: "🛠 활용(TREND)"}
+SECTION_TITLES = {FRONTIER: "📘 배움(FRONTIER)", TREND: "🛠 활용(TREND)", KOREA: "🇰🇷 국내 트렌드"}
+# 카카오 링크 메시지에 쓰는 짧은 라벨
+SHORT_LABELS = {TREND: "🛠 활용", KOREA: "🇰🇷 국내", FRONTIER: "📘 배움"}
+DEFAULT_ORDER = [TREND, KOREA, FRONTIER]
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -82,7 +85,7 @@ def _item_block(idx: int, it: Item, char_budget: int) -> str:
 
 def select_for_digest(items: list[Item], max_per_track: int) -> tuple[dict[str, list[Item]], dict[str, int]]:
     """트랙별로 나누고 상한 적용. 반환: (트랙별 항목, 트랙별 초과건수)."""
-    buckets: dict[str, list[Item]] = {FRONTIER: [], TREND: []}
+    buckets: dict[str, list[Item]] = {TREND: [], KOREA: [], FRONTIER: []}
     for it in items:
         if it.track in buckets:
             buckets[it.track].append(it)
@@ -115,9 +118,10 @@ def build_segments(items: list[Item], cfg: Config, date_str: str) -> list[tuple[
 
     buckets, overflow = select_for_digest(items, max_per_track)
     title_prefix = d.get("title_prefix", "🌏 오늘의 해외 AI 브리핑")
+    order = [t for t in (d.get("section_order") or DEFAULT_ORDER) if t in SECTION_TITLES]
 
     segs: list[tuple[str, str | None]] = [(f"{title_prefix} ({date_str})", None)]
-    for track in (FRONTIER, TREND):
+    for track in order:
         lst = buckets.get(track, [])
         header = SECTION_TITLES[track]
         if not lst:
@@ -200,7 +204,15 @@ def build_link_message(items: list[Item], cfg: Config, date_str: str, url: str) 
     d = cfg.get("delivery", {}) or {}
     limit = int(d.get("kakao_text_limit", 200))
     prefix = d.get("title_prefix", "🌏 오늘의 해외 AI 브리핑")
-    f = sum(1 for it in items if it.track == FRONTIER)
-    t = sum(1 for it in items if it.track == TREND)
-    text = f"{prefix} ({date_str})\n📘 배움 {f}건 · 🛠 활용 {t}건\n👉 전체 보기: {url}"
+    order = [t for t in (d.get("section_order") or DEFAULT_ORDER) if t in SHORT_LABELS]
+    caps = d.get("html_max_items") or {}
+    # HTML 페이지에 실제 표시되는(캡 적용) 건수와 맞춘다.
+    parts = []
+    for track in order:
+        n = sum(1 for it in items if it.track == track)
+        cap = int(caps.get(track, 8))
+        if 0 <= cap < n:
+            n = cap
+        parts.append(f"{SHORT_LABELS[track]} {n}")
+    text = f"{prefix} ({date_str})\n" + " · ".join(parts) + f"\n👉 전체 보기: {url}"
     return _truncate(text, limit)

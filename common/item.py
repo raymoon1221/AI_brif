@@ -20,7 +20,8 @@ _TRACKING_PARAMS = {"fbclid", "gclid", "mc_cid", "mc_eid", "igshid", "ref", "ref
 # 트랙 상수 — 문자열 오타를 방지하기 위해 한 곳에서 정의한다.
 FRONTIER = "FRONTIER"   # 배움: 새 모델·아키텍처·논문·기법·벤치마크 (원리)
 TREND = "TREND"         # 활용: 제품·시장·실전 적용·워크플로우 (바로 써먹기)
-VALID_TRACKS = (FRONTIER, TREND)
+KOREA = "KOREA"         # 국내 트렌드: 대한민국 국내 AI 소식(소스 지역 기반)
+VALID_TRACKS = (FRONTIER, TREND, KOREA)
 
 
 def now_iso() -> str:
