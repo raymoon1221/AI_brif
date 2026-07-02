@@ -121,6 +121,23 @@ def summarize_text_with_claude(item: Item, model: str, api_key: str, cfg: Config
     return item
 
 
+def summarize_text_with_gemini(item: Item, model: str, api_key: str, cfg: Config,
+                               is_korea: bool = False) -> Item:
+    """텍스트를 Gemini 로 요약·분류(Claude 대체 경로). 동일 프롬프트·JSON 계약을 쓴다."""
+    from google import genai  # 지역 import: 미설치 시 이 항목만 실패
+    client = genai.Client(api_key=api_key)
+    resp = client.models.generate_content(model=model, contents=_build_prompt(item, cfg, is_korea))
+    data = extract_json(resp.text or "")
+    summary = (data.get("summary") or "").strip()
+    if not summary:
+        snippet = re.sub(r"\s+", " ", item.raw_or_transcript or item.title)[:160]
+        summary = f"(요약 생성 실패 — 원문 발췌) {snippet}"
+    item.summary = summary
+    item.track = KOREA if is_korea else _coerce_track(data.get("track"), item, cfg)
+    item.meta["summarized_by"] = "gemini-text"
+    return item
+
+
 # --------------------------------------------------------------------------
 # 교차 중복 제거 — 텍스트/영상에 같은 이슈가 겹치면 신호 강한 것 하나만.
 # --------------------------------------------------------------------------
@@ -131,7 +148,8 @@ def _norm_title(t: str) -> str:
 def _signal(item: Item) -> float:
     """신호 강도: 실제 LLM 요약 > 폴백, 영상 가산, HN 점수/채널 신뢰도 반영."""
     s = 0.0
-    if item.meta.get("summarized_by") in ("claude", "gemini"):
+    # 실제 LLM 요약(claude/gemini/gemini-text)은 폴백보다 신호가 강하다.
+    if item.meta.get("summarized_by") not in (None, "", "fallback", "fallback-error"):
         s += 3.0
     if item.type == "video":
         s += 1.0
@@ -167,8 +185,16 @@ def dedup_cross(items: list[Item], threshold: float) -> list[Item]:
 # 오케스트레이션
 # --------------------------------------------------------------------------
 def process(items: list[Item], cfg: Config) -> list[Item]:
-    api_key = get_secret("ANTHROPIC_API_KEY")
-    model = cfg.get("models.claude", "claude-sonnet-4-6")
+    # 텍스트 요약 제공자 선택: gemini(기본, 무료 티어) | claude
+    provider = str(cfg.get("models.text_provider", "gemini")).lower()
+    if provider == "claude":
+        api_key = get_secret("ANTHROPIC_API_KEY")
+        model = cfg.get("models.claude", "claude-sonnet-4-6")
+        summarize_fn = summarize_text_with_claude
+    else:
+        api_key = get_secret("GEMINI_API_KEY")
+        model = cfg.get("models.gemini", "gemini-2.5-flash")
+        summarize_fn = summarize_text_with_gemini
     out: list[Item] = []
 
     for it in items:
@@ -188,12 +214,12 @@ def process(items: list[Item], cfg: Config) -> list[Item]:
                 continue
 
             if api_key:
-                summarize_text_with_claude(it, model, api_key, cfg, is_korea=is_korea)
+                summarize_fn(it, model, api_key, cfg, is_korea=is_korea)
                 time.sleep(0.2)
             else:
                 # 키 없음(주로 구조 dry-run): 폴백 요약 + (국내면 KOREA / 아니면 키워드 분류).
                 snippet = re.sub(r"\s+", " ", it.raw_or_transcript or it.title)[:180]
-                it.summary = f"(요약 생략 — ANTHROPIC_API_KEY 미설정) {snippet}"
+                it.summary = f"(요약 생략 — {provider} 키 미설정) {snippet}"
                 it.track = KOREA if is_korea else keyword_classify(it, cfg)
                 it.meta["summarized_by"] = "fallback"
             out.append(it)

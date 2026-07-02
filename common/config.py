@@ -59,7 +59,7 @@ DEFAULTS: dict[str, Any] = {
         "max_messages": 16,
         "send_interval_sec": 0.5,
     },
-    "models": {"claude": "claude-sonnet-4-6", "gemini": "gemini-2.5-flash"},
+    "models": {"text_provider": "gemini", "claude": "claude-sonnet-4-6", "gemini": "gemini-2.5-flash"},
     "paths": {"state_dir": "state", "out_dir": "out"},
 }
 

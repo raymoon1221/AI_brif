@@ -126,8 +126,11 @@ delivery:
 # 5) LLM 모델
 # ---------------------------------------------------------------------
 models:
-  claude: "claude-sonnet-4-6"     # 텍스트 요약·분류 (필요시 claude-haiku-4-5 로 비용↓)
-  gemini: "gemini-2.5-flash"      # 유튜브 영상 분석
+  # 텍스트 요약 제공자: gemini(기본, 무료 티어라 사실상 0원) | claude
+  #   - gemini 로 두면 ANTHROPIC_API_KEY 가 아예 필요 없다(키 하나로 텍스트+영상 통합).
+  text_provider: gemini
+  claude: "claude-sonnet-4-6"     # (text_provider=claude 일 때만) 필요시 claude-haiku-4-5 로 비용↓
+  gemini: "gemini-2.5-flash"      # 텍스트 요약(text_provider=gemini) + 유튜브 영상 분석 공용
 
 # ---------------------------------------------------------------------
 # 6) 경로(상태 파일) — 보통 그대로 둔다.

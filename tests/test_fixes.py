@@ -88,8 +88,9 @@ def test_page_prefix_within_limit():
 
 
 def test_claude_failure_keeps_item():
-    """#3: Claude 요약이 예외를 던져도 항목은 폴백으로 출력에 남는다(누락 0)."""
+    """#3: 요약이 예외를 던져도 항목은 폴백으로 출력에 남는다(누락 0)."""
     cfg = load_config()
+    cfg.data.setdefault("models", {})["text_provider"] = "claude"  # 이 테스트는 Claude 경로를 고정
     orig_get = cs.get_secret
     orig_sum = cs.summarize_text_with_claude
     cs.get_secret = lambda name, *a, **k: "fake-key" if name == "ANTHROPIC_API_KEY" else orig_get(name, *a, **k)

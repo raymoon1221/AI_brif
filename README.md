@@ -6,8 +6,9 @@
 - **배움(FRONTIER)** — 새 모델·아키텍처·논문·기법·벤치마크 등 *원리를 배우는* 기술 콘텐츠
 - **활용(TREND)** — 제품 출시·시장 동향·실전 적용·워크플로우 등 *바로 써먹는* 콘텐츠
 
-> 텍스트는 **Claude** 로, 유튜브 영상은 **Gemini 네이티브 YouTube URL 입력**(자막 없어도 동작)으로
-> 처리합니다. 최종 다이제스트는 항상 **한국어**입니다.
+> 텍스트 요약과 유튜브 영상 분석을 모두 **Gemini** 로 처리합니다(영상은 네이티브 YouTube URL
+> 입력이라 자막이 없어도 동작). 텍스트 요약은 `text_provider=claude` 로 Claude 전환도 가능합니다.
+> 최종 다이제스트는 항상 **한국어**입니다.
 
 ---
 
@@ -62,8 +63,8 @@ cp .env.example .env   # Windows: copy .env.example .env
 
 | 변수 | 용도 | 필수 |
 |------|------|------|
-| `ANTHROPIC_API_KEY` | 텍스트 요약·분류(Claude) | 발송 운영 시 필요 |
-| `GEMINI_API_KEY` | 유튜브 영상 분석(Gemini) | 영상 요약 시 필요 |
+| `GEMINI_API_KEY` | 텍스트 요약·분류 + 유튜브 영상 분석(Gemini) | **필요**(텍스트·영상 공용) |
+| `ANTHROPIC_API_KEY` | 텍스트 요약·분류(Claude) | 선택(`text_provider=claude` 일 때만) |
 | `YOUTUBE_API_KEY` | 영상 길이/메타데이터 정확도 | 선택(없으면 탐지만) |
 | `KAKAO_REST_API_KEY` | 카카오 앱 REST API 키(=client_id) | 발송 시 필요 |
 | `KAKAO_REFRESH_TOKEN` | access token 자동 재발급용 | 발송 시 필요 |
@@ -74,13 +75,16 @@ cp .env.example .env   # Windows: copy .env.example .env
 > 코드와 저장소에는 **플레이스홀더만** 둡니다. 실제 값은 `.env`(gitignore) 또는
 > GitHub Secrets 에만 저장하세요.
 
-### Gemini 키
+### Gemini 키 (기본 · 텍스트+영상 공용)
 [Google AI Studio](https://aistudio.google.com/apikey) 에서 API 키 발급 → `GEMINI_API_KEY`.
+이 **키 하나로 텍스트 요약·분류와 유튜브 영상 분석을 모두** 처리합니다(무료 티어면 사실상 0원).
 유튜브 영상 네이티브 URL 입력은 프리뷰/무료이며 **하루 8시간 분량** 한도가 있습니다
 (파이프라인의 `daily_budget_minutes` 가 이 한도를 지키도록 선별합니다).
 
-### Claude 키
-[Anthropic Console](https://console.anthropic.com/) 에서 발급 → `ANTHROPIC_API_KEY`.
+### Claude 키 (선택)
+텍스트 요약을 Claude 로 돌리고 싶을 때만 필요합니다. `config.yaml` 의
+`models.text_provider` 를 `claude` 로 바꾸고 [Anthropic Console](https://console.anthropic.com/)
+에서 발급한 키를 `ANTHROPIC_API_KEY` 로 저장하세요. 기본값(`gemini`)이면 이 키는 없어도 됩니다.
 
 ---
 
@@ -289,6 +293,7 @@ AI_brif/
 - **`KAKAO_REFRESH_TOKEN 이 없어 …`** → 4장 절차로 refresh token 을 발급해 `.env` 에 저장.
 - **영상이 안 보임** → `GEMINI_API_KEY` 미설정 시, 요약 없는 영상은 품질 보호를 위해 이번
   다이제스트에서 제외됩니다. 탐지 결과만 보려면 `python -m collectors.collector_video --detect-only`.
-- **텍스트 요약이 "(요약 생략 …)"** → `ANTHROPIC_API_KEY` 미설정 시의 폴백 표시입니다.
+- **텍스트 요약이 "(요약 생략 …)"** → 텍스트 제공자 키 미설정 시의 폴백 표시입니다
+  (기본 `gemini` → `GEMINI_API_KEY`, `text_provider=claude` → `ANTHROPIC_API_KEY`).
 - **소스 하나가 404** → 자동으로 건너뛰고 나머지는 정상 발송됩니다(로그에 경고).
 - **알림이 너무 많음** → `delivery.max_items_per_track` 를 낮추세요(200자 한도 때문).
